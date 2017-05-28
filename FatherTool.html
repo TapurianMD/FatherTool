@@ -1,0 +1,522 @@
+<!-- Copyright © 2017, Xerxes Langerudi. All rights reserved. -->
+
+<!doctype html>
+
+<html>
+<head>
+	<title>FatherTool</title>
+</head>
+
+<style>
+
+html, body
+{
+	text-align: right;
+	color: white;
+	height: 95%;
+}
+
+.canvas
+{
+	float: left;
+}
+
+</style>
+
+<body>
+
+<canvas width="970" height="650" class="canvas" id="canvas"></canvas>
+
+<script type="text/javascript">
+
+var canvas = document.querySelector("#canvas");
+var cx = canvas.getContext("2d");
+
+canvas.width = screen.width > 1667? 1266 : screen.width - 401;
+canvas.height = screen.height > 768? 650 : screen.height - 118;
+
+var bigENOUGH = true;
+
+if (screen.width < 1366)
+{
+	alert("This App works only on screens with a width larger than 1366px.");
+
+	bigENOUGH = false;
+}
+
+myCanvasX = canvas.width;
+myCanvasY = canvas.height;
+
+var startTime = new Date().getTime();
+
+var NAVIGATION_MODES = {MANUAL: "MANUAL", AUTOMATIC: "AUTOMATIC"};
+var TOOL_MODES = {ON: "ON", OFF: "OFF"};
+var TOOL_TYPES = {WELDER: "WELDER", CUTTER: "CUTTER"};
+
+var navigationMode = NAVIGATION_MODES.AUTOMATIC;
+var toolMode = TOOL_MODES.ON;
+var toolType = TOOL_TYPES.CUTTER;
+
+var previousNavigationMode = navigationMode;
+
+var VIEW_MODES = {START: "START", FATHER_TOOL: "FATHER_TOOL", SETTINGS: "SETTINGS", HELP: "HELP", EMERGENCY: "EMERGENCY"}
+
+var viewMode = VIEW_MODES.START;
+
+var actions = [];
+
+var fatherTool = {
+x: 0,
+y: 0,
+actionPointXPrevious: 0,
+actionPointYPrevious: 0,
+width: 0,
+height: 0,
+actionNumber: 0,
+actions: [],
+go: function (x, y, toolMode)
+{
+	x = x - (this.actions.length > 0? this.actions[this.actions.length - 1].x: 0);
+	y = y - (this.actions.length > 0? this.actions[this.actions.length - 1].y: 0);
+
+	// If approximately 0: round to zero
+	x = x < 0.01 && x > -0.01? 0 : x;
+	y = y < 0.01 && y > -0.01? 0 : y;
+
+	// Find: largest, if both negative, find smallest, then: negate
+	var largest = y >= 0 && x >= 0? (x > y? x : y) : (x < y? x - x - x: y - y - y);
+
+	// Find: smallest, if both negative, find largest, then: negate
+	var smallest = y >= 0 && x >= 0? (x < y? x : y) : (x < y? x - x - x: y - y - y);
+
+	// If none is positive don't increment X, if both are negative increment by X divided by the negation of the largest other wise return X divided by the largest
+	var incrementX = largest == 0? 0 : x < 0 && largest < 0? x / (largest - largest - largest) : x / largest;
+
+	// If none is positive don't increment Y, if both are negative increment by Y divided by the negation of the largest other wise return Y divided by the largest
+	var incrementY = largest == 0? 0 : y < 0 && largest < 0? y / (largest - largest - largest) : y / largest;
+
+	var smallestIncrement = incrementX > 0? incrementX > incrementY? incrementY : incrementX : incrementX < incrementY? incrementY : incrementX;
+
+	cx.beginPath();
+
+	var fromX = this.actions.length > 0? this.actions[this.actions.length - 1].x: 0;
+	var fromY = this.actions.length > 0? this.actions[this.actions.length - 1].y: 0;
+
+	for (z = 0; z < (smallest < 0 && largest > 0? smallest - smallest - smallest : largest < 0? largest - largest - largest : largest); z++)
+	{
+		fromX += incrementX;
+		fromY += incrementY;
+
+		this.actions.push({x: fromX, y: fromY, toolMode: toolMode, time: new Date().getTime()})
+	}
+
+	this.actionNumber = this.actions.length;
+},
+draw: function(inX, inY, width, height, actionPointX, actionPointY, size) 
+{
+	// Clear clouds
+	cx.fillStyle = "white";
+
+	var xVehicleBarWidth = 10 * size;
+	var yVehicleBarWidth = 3 * size;
+	var drillBitDiameter = 2 * size;
+
+	// X: inX - xVehicleBarWidth / 2
+	// Y: inX - linexVehicleBarWidthwidth / 2
+	// endX: width + xVehicleBarWidth
+	// endY: height + xVehicleBarWidth
+	this.width = width;
+	this.height = height;
+
+	cx.fillRect(	inX - xVehicleBarWidth / 2,
+			inY - xVehicleBarWidth / 2,
+			this.width + xVehicleBarWidth,
+			this.height + xVehicleBarWidth);
+
+	// When parameters change
+	if (this.actionPointXPrevious != actionPointX || this.actionPointYPrevious != actionPointY)
+	{
+		this.actionPointXPrevious = actionPointX;
+		this.actionPointYPrevious = actionPointY;
+	
+		this.x = actionPointX;
+		this.y = actionPointY;
+
+		if (navigationMode == NAVIGATION_MODES.MANUAL && viewMode == VIEW_MODES.FATHER_TOOL)
+		{
+			this.actions.push({x: actionPointX, y: actionPointY, toolMode: toolMode, time: new Date().getTime()})
+
+			this.actionNumber = this.actions.length;
+		}
+	}
+
+	var sheetColor = "pink";
+	var boardColor = "fuchsia";
+	var structureColor = "darkred";
+
+	cx.beginPath();
+
+	cx.fillStyle = sheetColor;
+
+	cx.fillRect(inX + 120 * size, inY + 39 * size, width * size - 120 * size * 2, height * size - 38 * size * 2);
+
+	cx.lineWidth = drillBitDiameter;
+
+	var i;
+
+	cx.strokeStyle = boardColor;
+
+	cx.beginPath();
+
+	for (i = 0; i < this.actionNumber; i++)
+	{
+		if (this.actions[i].toolMode == TOOL_MODES.ON)
+		{
+			cx.strokeRect(inX + 119 * size + this.actions[i].x * size, inY + this.actions[i].y * size + 38 * size, 2 * size, 2 * size);
+		}
+	}
+
+	cx.stroke();
+
+	cx.strokeStyle = structureColor;
+
+	cx.lineWidth = xVehicleBarWidth;
+
+	// X Rails
+	cx.moveTo(inX, inY);
+	cx.lineTo(inX + width * size, inY);
+	cx.moveTo(inX, inY + height * size);
+	cx.lineTo(inX + width * size, inY + height * size);
+
+
+	// X Vehicle Body
+	cx.moveTo(inX + actionPointX * size + 70 * size, inY);
+	cx.lineTo(inX + actionPointX * size + 70 * size, inY + 300 * size);
+
+	cx.moveTo(inX + actionPointX * size + 170 * size, inY);
+	cx.lineTo(inX + actionPointX * size + 170 * size, inY + 300 * size);
+
+	cx.stroke();
+
+
+	cx.lineWidth = yVehicleBarWidth;
+
+
+	// Y Vehicle Body
+	cx.moveTo(inX + actionPointX * size + 70 * size, inY + actionPointY * size + 25 * size);
+	cx.lineTo(inX + actionPointX * size + 170 * size, inY + actionPointY * size + 25 * size);
+
+	cx.moveTo(inX + actionPointX * size + 70 * size, inY + actionPointY * size + 50 * size);
+	cx.lineTo(inX + actionPointX * size + 170 * size, inY + actionPointY * size + 50 * size);
+
+	cx.stroke();
+
+
+	// Action Point
+	cx.beginPath();
+	cx.arc(inX + 120 * size + actionPointX * size, inY + actionPointY * size + 39 * size, 5 * size, 0, 7);
+	cx.stroke();
+
+	cx.font = 15 * size + "px verdana";
+	cx.fillStyle = "darkred";
+	cx.fillText("Navigation Mode: " + navigationMode + " Tool Mode: " + toolMode + " Tool Type: " + toolType + " Actions Length: " + this.actions.length, inX, inY + 350 * size);
+}
+}
+
+var y = 0;
+
+var demoActions = [];
+
+var startPage = {StartPage: function()
+{
+	this.myFatherTool = Object.create(fatherTool);
+
+	this.myFatherTool.actions = actions;
+
+	this.myFatherTool.go(50, 50, TOOL_MODES.OFF);
+	this.myFatherTool.go(140, 50, TOOL_MODES.ON);
+	this.myFatherTool.go(140, 100, TOOL_MODES.ON);
+	this.myFatherTool.go(130, 100, TOOL_MODES.OFF);
+	this.myFatherTool.go(130, 130, TOOL_MODES.ON);
+	this.myFatherTool.go(120, 130, TOOL_MODES.ON);
+	this.myFatherTool.go(120, 100, TOOL_MODES.ON);
+	this.myFatherTool.go(130, 100, TOOL_MODES.ON);
+	this.myFatherTool.go(140, 100, TOOL_MODES.OFF);
+	this.myFatherTool.go(140, 200, TOOL_MODES.ON);
+	this.myFatherTool.go(50, 200, TOOL_MODES.ON);
+	this.myFatherTool.go(50, 50, TOOL_MODES.ON);
+
+	this.myFatherTool.go(250, 50, TOOL_MODES.OFF);
+	this.myFatherTool.go(340, 50, TOOL_MODES.ON);
+	this.myFatherTool.go(340, 100, TOOL_MODES.ON);
+	this.myFatherTool.go(330, 100, TOOL_MODES.OFF);
+	this.myFatherTool.go(330, 130, TOOL_MODES.ON);
+	this.myFatherTool.go(320, 130, TOOL_MODES.ON);
+	this.myFatherTool.go(320, 100, TOOL_MODES.ON);
+	this.myFatherTool.go(330, 100, TOOL_MODES.ON);
+	this.myFatherTool.go(340, 100, TOOL_MODES.OFF);
+	this.myFatherTool.go(340, 200, TOOL_MODES.ON);
+	this.myFatherTool.go(250, 200, TOOL_MODES.ON);
+	this.myFatherTool.go(250, 50, TOOL_MODES.ON);
+	this.myFatherTool.go(0, 0, TOOL_MODES.OFF);
+
+	demoActions = this.myFatherTool.actions;
+},
+draw: function()
+{
+	// Draw FatherTool
+	this.myFatherTool.actionNumber = y;
+	this.myFatherTool.draw(100, 200, 800, 300, actions[y].x, actions[y].y, 1);
+
+	y = actions.length <= (y = y + 5)? 0 : y;
+}
+}
+
+var settingsPage = {SettingsPage: function()
+{
+	this.myFatherTool = Object.create(fatherTool);
+
+	this.myFatherTool.actions = demoActions;
+},
+draw: function()
+{
+	// Draw FatherTool
+	this.myFatherTool.actionNumber = y;
+	this.myFatherTool.draw(450, 200, 800, 300, actions[y].x, actions[y].y, 0.5);
+
+	y = actions.length <= (y = y + 5)? 0 : y;
+
+	cx.font = "25px verdana";
+	cx.fillStyle = "darkred";
+	cx.fillText("Settings", 100, 200);
+
+	cx.font = "20px verdana";
+	cx.fillText("Navigation Mode: " + navigationMode, 120, 250);
+	cx.fillText("Tool Mode: " + toolMode, 120, 280);
+	cx.fillText("Tool Type: " + toolType, 120, 310);
+}
+}
+
+var helpPage = {HelpPage: function()
+{
+	this.myFatherTool = Object.create(fatherTool);
+
+	this.myFatherTool.actions = demoActions;
+},
+draw: function()
+{
+	// Draw FatherTool
+	this.myFatherTool.actionNumber = y;
+	this.myFatherTool.draw(450, 200, 800, 300, actions[y].x, actions[y].y, 0.5);
+
+	y = actions.length <= (y = y + 5)? 0 : y;
+
+	cx.font = "25px verdana";
+	cx.fillStyle = "darkred";
+	cx.fillText("Help", 100, 200);
+
+	cx.font = "20px verdana";
+	cx.fillText("Father tool: f", 120, 250);
+	cx.fillText("Manual navigation: m", 120, 280);
+	cx.fillText("Automatic navigation: a", 120, 310);
+	cx.fillText("Activate/deactivate tool: o", 120, 340);
+	cx.fillText("Welder: w", 120, 370);
+	cx.fillText("Cutter: c", 120, 400);
+	cx.fillText("Emergency: e", 120, 430);
+	cx.fillText("Settings: s", 120, 460);
+	cx.fillText("Help: h", 120, 490);
+}
+}
+
+var emergencyPage = {EmergencyPage: function()
+{
+},
+draw: function()
+{
+	cx.fillStyle = "darkred";
+
+	cx.font = 70 + "px Verdana";
+
+	if (new Date().getTime() % 2) { cx.fillText("EMERGENCY!", 200, 300); };
+}
+}
+
+var Update;
+
+var actionPointX = 0;
+var actionPointY = 0;
+var moveSize = 2;
+
+function decodeInput(event)
+{
+	switch(event.keyCode)
+	{
+		case 69:
+			viewMode = VIEW_MODES.EMERGENCY;
+			break;
+		case 38:
+			actionPointY > 0 ? actionPointY -= moveSize : 0;
+			break;
+		case 40:
+			actionPointY < myCanvasY - (200 + 75 + 150) ? actionPointY += moveSize : 0;
+			break;
+		case 37:
+			actionPointX > 0 ? actionPointX -= moveSize : 0;
+			break;
+		case 39:
+			actionPointX < myCanvasX - (200 + 75 + 130) ? actionPointX += moveSize : 0;
+			break;
+		case 79:
+			toolMode = toolMode == TOOL_MODES.ON? TOOL_MODES.OFF : TOOL_MODES.ON;
+			break;
+		case 87:
+			toolType = TOOL_TYPES.WELDER;
+			break;
+		case 67:
+			toolType = TOOL_TYPES.CUTTER;
+			break;
+		case 77:
+			navigationMode = NAVIGATION_MODES.MANUAL;
+			break;
+		case 65:
+			navigationMode = myFatherTool.actions.length > 0 ? NAVIGATION_MODES.AUTOMATIC : NAVIGATION_MODES.MANUAL;
+			break;
+		case 83:
+			viewMode = VIEW_MODES.SETTINGS;
+			break;
+		case 72:
+			viewMode = VIEW_MODES.HELP;
+			break;
+		case 70:
+			viewMode = VIEW_MODES.FATHER_TOOL;
+			break;
+	}
+}
+
+function onInput(event)
+{
+	if (viewMode != VIEW_MODES.EMERGENCY)
+	{
+		decodeInput(event);
+	}
+}
+
+var myFatherTool = Object.create(fatherTool);
+
+myFatherTool.actions = actions;
+
+var myStartPage = new startPage.StartPage();
+
+myStartPage.draw = startPage.draw;
+
+var myHelpPage = new helpPage.HelpPage();
+
+myHelpPage.draw = helpPage.draw;
+
+var mySettingsPage = new settingsPage.SettingsPage();
+
+mySettingsPage.draw = settingsPage.draw;
+
+var myEmergencyPage = emergencyPage.EmergencyPage;
+
+myEmergencyPage.draw = emergencyPage.draw;
+
+addEventListener("keydown", function(event) {onInput(event)});
+
+function drawTool()
+{
+	if (navigationMode != previousNavigationMode)
+	{
+		previousNavigationMode == NAVIGATION_MODES.AUTOMATIC && (myFatherTool.actions = []);
+
+		myFatherTool.actionNumber = myFatherTool.actions.length;
+
+		y = 0;
+
+		actionPointX = 0;
+		actionPointY = 0;
+
+		previousNavigationMode = navigationMode;
+	}
+
+	switch (navigationMode)
+	{
+		case NAVIGATION_MODES.MANUAL:
+			// Draw FatherTool
+			myFatherTool.draw(100, 200, 800, 300, actionPointX, actionPointY, 1);
+			break;
+		case NAVIGATION_MODES.AUTOMATIC:
+			// Draw FatherTool
+			myFatherTool.actionNumber = y;
+			myFatherTool.draw(100, 200, 800, 300, myFatherTool.actions[y].x, myFatherTool.actions[y].y, 1);
+
+			y = myFatherTool.actions.length <= ++y? 0 : y;
+		break;
+	}
+}
+
+function drawMachinery()
+{
+	// Clear clouds
+	cx.fillStyle = "white";
+	cx.fillRect(0, 0, myCanvasX, myCanvasY);
+
+	// Logo
+	cx.font = "40px verdana";
+	cx.fillStyle = "darkred";
+	cx.fillText("FatherTool", 100, 100);
+
+	switch (viewMode)
+	{
+		case VIEW_MODES.START:
+			myStartPage.draw("FatherTool");
+		break;
+		case VIEW_MODES.FATHER_TOOL:
+			drawTool();
+		break;
+		case VIEW_MODES.SETTINGS:
+			mySettingsPage.draw("FatherTool");
+		break;
+		case VIEW_MODES.HELP:
+			myHelpPage.draw("FatherTool");
+		break;
+		case VIEW_MODES.EMERGENCY:
+			myEmergencyPage.draw("FatherTool");
+		break;
+	}
+
+	// Display uptime
+	cx.fillStyle = "darkred";
+	cx.font = 20 + "px Verdana";
+	cx.fillText("Uptime: " + Math.floor((new Date().getTime() - startTime) / 1000), 800, 100);
+
+	// Help info
+	if (viewMode != VIEW_MODES.HELP)
+	{
+		cx.font = "20px verdana";
+		cx.fillStyle = "darkred";
+		cx.fillText("Press \"h\" for help", 780, 600);
+	}
+}
+
+function drawFactory()
+{
+	// Update
+	update = setInterval(drawMachinery, 10);
+}
+
+function draw()
+{
+	if (bigENOUGH)
+	{
+		drawFactory();
+	}
+}
+
+draw();
+
+</script>
+
+</body>
+</html>
+
